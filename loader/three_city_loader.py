@@ -4,9 +4,9 @@ import numpy as np
 from scipy.misc import imread, imresize, imsave, imshow
 
 from torch.utils import data
-
-from ptsemseg.utils import recursive_glob
-from ptsemseg.augmentations import Compose, RandomHorizontallyFlip, RandomRotate, Scale
+from torchvision import transforms
+from utils import recursive_glob
+from augmentations import Compose, RandomHorizontallyFlip, RandomRotate, Scale
 
 label_map = {
     'Impervious_surfaces': [255, 255, 255],
@@ -16,7 +16,6 @@ label_map = {
     'Car': [255, 255, 0],
     'Clutter': [255, 0, 0],
 }
-
 
 
 class threeCityLoader(data.Dataset):
@@ -55,7 +54,7 @@ class threeCityLoader(data.Dataset):
         self.images_base = os.path.join(self.root, self.split,"images",)
         self.annotations_base = os.path.join(self.root, self.split, "labels")
 
-        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
+        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")[:200]
 
         self.void_classes = []
         self.valid_classes = [0, 1, 2]
@@ -110,10 +109,10 @@ class threeCityLoader(data.Dataset):
         msi = img[:,:,:3]
         dsm = np.expand_dims(img[:,:,-1], 0)
         msi = msi.astype(np.float64)
-        if self.img_norm:
-            dsm = (dsm - np.mean(dsm)) / np.std(dsm - np.mean(dsm))
-            for i in range(3):
-                msi[:,:,i] = (msi[:,:,i] - np.mean(msi[:,:,i])) / np.std(msi[:,:,i])
+        # if self.img_norm:
+        #     dsm = (dsm - np.mean(dsm)) / np.std(dsm - np.mean(dsm))
+        #     for i in range(3):
+        #         msi[:,:,i] = (msi[:,:,i] - np.mean(msi[:,:,i])) / np.std(msi[:,:,i])
         #imsave('/home/robotics/image.png', msi)
         # NHWC -> NCHW
         msi = msi.transpose(2, 0, 1)
@@ -135,6 +134,12 @@ class threeCityLoader(data.Dataset):
         msi = torch.from_numpy(msi).float()
         dsm = torch.from_numpy(dsm).float()
         lbl = torch.from_numpy(lbl).long()
+
+        if self.img_norm:
+            norm = transforms.Compose([transforms.Normalize((0.5,), (0.5,))])
+            dsm = norm(dsm)
+            norm = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            msi = norm(msi)
 
         input = torch.cat((msi, dsm), 0)
 

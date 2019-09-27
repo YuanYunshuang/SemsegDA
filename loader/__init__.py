@@ -1,6 +1,7 @@
 from torch.utils import data
 
 from loader.dsm_loader import dsmLoader
+from loader.three_city_loader import threeCityLoader
 from augmentations import get_composed_augmentations
 
 
@@ -11,6 +12,7 @@ def get_loader_cls(name):
     """
     return {
         "dsm": dsmLoader,
+        "threeCity": threeCityLoader
     }[name]
 
 
@@ -75,8 +77,7 @@ def get_loader(cfg, setname, pathname='path', sampler=None):
 
 def get_sampler_cls(name):
     return {
-        "rssrai_sampler": rssrai_sampler.RssraiSampler,
-        "pickbot_sampler": pickbot_sampler.pickBotSampler,
+
     }[name]
 
 

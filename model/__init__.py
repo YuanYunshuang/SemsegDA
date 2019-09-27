@@ -3,6 +3,7 @@ import torchvision.models as model
 import torch
 
 from model.fcn import FCN
+from model.drcn import DRCN
 
 
 def get_model(cfg, n_classes, n_channels, version=None):
@@ -15,6 +16,9 @@ def get_model(cfg, n_classes, n_channels, version=None):
     if name == "fcn":
         model = model(n_classes=n_classes)
         model.apply(weights_init)
+    elif name == "drcn":
+        model = model(cfg)
+        model.apply(weights_init)
 
     return model
 
@@ -22,7 +26,8 @@ def get_model(cfg, n_classes, n_channels, version=None):
 def _get_model_instance(name):
     try:
         return {
-            "fcn": FCN
+            "fcn": FCN,
+            "drcn": DRCN,
         }[name]
 
     except:

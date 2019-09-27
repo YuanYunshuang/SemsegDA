@@ -28,7 +28,7 @@ class FCN(nn.Module):
             self.conv_block3(128, 256),
             self.conv_block2(256, 256),
             self.conv_block3(256, 384),
-        )
+        ) # filed of view: 5*2*2*2*2=80
 
         self.decoder = nn.Sequential(
             self.tr_conv_block1(384, 256),
