@@ -49,9 +49,11 @@ class DRCN(nn.Module):
         self.criterionPth2 = torch.nn.L1Loss()
         self.loss1 = None
         self.loss2 = None
-        self.optimizer = get_optimizer(self.parameters(), cfg)
+        self.optimizer1 = get_optimizer(self.filter_params('up1', reverse=True), cfg)
+        self.optimizer2 = get_optimizer(self.filter_params('up1'), cfg)
         if cfg["training"]["lr_schedule"] is not None:
-            self.scheduler = get_scheduler(self.optimizer, cfg["training"]["lr_schedule"])
+            self.scheduler1 = get_scheduler(self.optimizer1, cfg["training"]["lr_schedule"])
+            self.scheduler2 = get_scheduler(self.optimizer2, cfg["training"]["lr_schedule"])
         self.lam = cfg["training"]["loss"]["lambda"]
 
     def set_input(self, image, label):
@@ -64,24 +66,37 @@ class DRCN(nn.Module):
         self.out1 = out[0]
         self.out2 = out[1]
 
-    def backward(self):
-        self.loss1 = self.lam * self.criterionPth1(self.out1, self.B.to(self.device))
-        self.loss2 = (1 - self.lam) * self.criterionPth2(self.out2, self.A.to(self.device))
-        loss = self.loss1 + self.loss2
-        loss.backward()
+    def backward1(self):
+        self.loss1 = self.criterionPth1(self.out1, self.B.to(self.device))
+        self.loss1.backward()
+
+    def backward2(self):
+        self.loss2 = self.criterionPth2(self.out2, self.A.to(self.device))
+        self.loss2.backward()
 
     def optimize_parameters(self):
         self.forward()
-        self.optimizer.zero_grad()
-        self.backward()
-        self.optimizer.step()
+        self.optimizer2.zero_grad()
+        self.backward2()
+        self.optimizer2.step()
+        self.forward()
+        self.optimizer1.zero_grad()
+        self.backward1()
+        self.optimizer1.step()
 
     def inference(self):
         self.forward()
-        self.loss1 = self.lam * self.criterionPth1(self.out1, self.B.to(self.device))
-        self.loss2 = (1 - self.lam) * self.criterionPth2(self.out2, self.A.to(self.device))
+        self.loss1 = self.criterionPth1(self.out1, self.B.to(self.device))
+        self.loss2 = self.criterionPth2(self.out2, self.A.to(self.device))
 
-
+    def filter_params(self, fil_str, reverse=False):
+        params = []
+        for name, param in self.named_parameters():
+            if reverse and fil_str in name:
+                params.append(param)
+            elif not reverse and fil_str not in name:
+                params.append(param)
+        return params
 
 
 class UnetSkipConnectionBlock(nn.Module):

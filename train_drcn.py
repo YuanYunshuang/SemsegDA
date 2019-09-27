@@ -52,7 +52,7 @@ def train(cfg):
 
             if total_iters % cfg["training"]["print_interval"]==0:
                 print_info = "Epoch:[{:4d}/{:4d}] Iter: [{:6d}] loss1: {:.5f}  loss2: {:.5f}  lr: {:.8f}"\
-                    .format(epoch, train_epochs, total_iters, model.loss1.item(), model.loss2.item(), model.optimizer.defaults['lr'])
+                    .format(epoch, train_epochs, total_iters, model.loss1.item(), model.loss2.item(), model.optimizer1.defaults['lr'])
                 print(print_info)
 
         if epoch % cfg["training"]["val_interval"]==0:
@@ -64,15 +64,15 @@ def train(cfg):
 
                 running_metrics_val.update(labels, preds)
                 val_loss1_meter.update(model.loss1.item())
-                val_loss2_meter.update(model.loss2.item())
-                val_loss_meter.update(model.loss1.item() + model.loss2.item())
+                val_loss2_meter.update(model.loss2.item() * 5)
+                val_loss_meter.update(model.loss1.item() + model.loss2.item() * 5)
 
             # visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
             losses = {'loss1': val_loss1_meter.avg,
-                      'loss2': val_loss2_meter.avg,
+                      '5loss2': val_loss2_meter.avg,
                       'total_loss': val_loss_meter.avg}
             visualizer.plot_current_losses(epoch, epoch / train_epochs, losses)
-            
+
             score, class_iou = running_metrics_val.get_scores()
             for k, v in score.items():
                 print(k, v)
@@ -87,8 +87,10 @@ def train(cfg):
                 state = {
                     "epoch": epoch + 1,
                     "model_state": model.state_dict(),
-                    "optimizer_state": model.optimizer.state_dict(),
-                    "scheduler_state": model.scheduler.state_dict(),
+                    "optimizer1_state": model.optimizer1.state_dict(),
+                    "scheduler1_state": model.scheduler1.state_dict(),
+                    "optimizer2_state": model.optimizer2.state_dict(),
+                    "scheduler2_state": model.scheduler2.state_dict(),
                     "best_iou": best_iou,
                 }
                 save_path = os.path.join(
