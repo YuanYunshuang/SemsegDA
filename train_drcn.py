@@ -29,6 +29,9 @@ def train(cfg):
 
     # Setup Metrics and visualizer
     running_metrics_val = runningScore(cfg["data"]["n_classes"])
+    val_loss1_meter = averageMeter()
+    val_loss2_meter = averageMeter()
+    val_loss_meter = averageMeter()
     opt = BaseOptions()
     visualizer = Visualizer(opt)
 
@@ -52,13 +55,6 @@ def train(cfg):
                     .format(epoch, train_epochs, total_iters, model.loss1.item(), model.loss2.item(), model.optimizer.defaults['lr'])
                 print(print_info)
 
-        if epoch % opt.visual.display_freq == 0:
-            #visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
-            losses = {'loss1': model.loss1.item(),
-                      'loss2': model.loss2.item(),
-                      'total_loss': model.loss1.item() + model.loss2.item()}
-            visualizer.plot_current_losses(epoch, epoch / train_epochs, losses)
-
         if epoch % cfg["training"]["val_interval"]==0:
             for images, labels in loader:
                 model.set_input(images, labels)
@@ -67,7 +63,16 @@ def train(cfg):
                 labels = labels.data.numpy().squeeze()
 
                 running_metrics_val.update(labels, preds)
+                val_loss1_meter.update(model.loss1.item())
+                val_loss2_meter.update(model.loss2.item())
+                val_loss_meter.update(model.loss1.item() + model.loss2.item())
 
+            # visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+            losses = {'loss1': val_loss1_meter.avg,
+                      'loss2': val_loss2_meter.avg,
+                      'total_loss': val_loss_meter.avg}
+            visualizer.plot_current_losses(epoch, epoch / train_epochs, losses)
+            
             score, class_iou = running_metrics_val.get_scores()
             for k, v in score.items():
                 print(k, v)

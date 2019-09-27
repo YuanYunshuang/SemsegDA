@@ -48,7 +48,7 @@ class DRCN(nn.Module):
         self.criterionPth1 = cross_entropy2d
         self.criterionPth2 = torch.nn.L1Loss()
         self.loss1 = None
-        self.loss2 = torch.Tensor([0.])
+        self.loss2 = None
         self.optimizer = get_optimizer(self.parameters(), cfg)
         if cfg["training"]["lr_schedule"] is not None:
             self.scheduler = get_scheduler(self.optimizer, cfg["training"]["lr_schedule"])
@@ -66,8 +66,8 @@ class DRCN(nn.Module):
 
     def backward(self):
         self.loss1 = self.lam * self.criterionPth1(self.out1, self.B.to(self.device))
-        #self.loss2 = (1 - self.lam) * self.criterionPth2(self.out2, self.A.to(self.device))
-        loss = self.loss1 #+ self.loss2
+        self.loss2 = (1 - self.lam) * self.criterionPth2(self.out2, self.A.to(self.device))
+        loss = self.loss1 + self.loss2
         loss.backward()
 
     def optimize_parameters(self):
@@ -78,6 +78,8 @@ class DRCN(nn.Module):
 
     def inference(self):
         self.forward()
+        self.loss1 = self.lam * self.criterionPth1(self.out1, self.B.to(self.device))
+        self.loss2 = (1 - self.lam) * self.criterionPth2(self.out2, self.A.to(self.device))
 
 
 
