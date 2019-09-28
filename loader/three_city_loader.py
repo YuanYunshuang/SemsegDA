@@ -54,7 +54,7 @@ class threeCityLoader(data.Dataset):
         self.images_base = os.path.join(self.root, self.split,"images",)
         self.annotations_base = os.path.join(self.root, self.split, "labels")
 
-        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")[:200]
+        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
 
         self.void_classes = []
         self.valid_classes = [0, 1, 2]
@@ -109,10 +109,10 @@ class threeCityLoader(data.Dataset):
         msi = img[:,:,:3]
         dsm = np.expand_dims(img[:,:,-1], 0)
         msi = msi.astype(np.float64)
-        # if self.img_norm:
-        #     dsm = (dsm - np.mean(dsm)) / np.std(dsm - np.mean(dsm))
-        #     for i in range(3):
-        #         msi[:,:,i] = (msi[:,:,i] - np.mean(msi[:,:,i])) / np.std(msi[:,:,i])
+        if self.img_norm:
+            dsm = (dsm - np.mean(dsm)) / np.std(dsm - np.mean(dsm))
+            for i in range(3):
+                msi[:,:,i] = (msi[:,:,i] - np.mean(msi[:,:,i])) / np.std(msi[:,:,i])
         #imsave('/home/robotics/image.png', msi)
         # NHWC -> NCHW
         msi = msi.transpose(2, 0, 1)
@@ -135,11 +135,50 @@ class threeCityLoader(data.Dataset):
         dsm = torch.from_numpy(dsm).float()
         lbl = torch.from_numpy(lbl).long()
 
-        if self.img_norm:
-            norm = transforms.Compose([transforms.Normalize((0.5,), (0.5,))])
-            dsm = norm(dsm)
-            norm = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-            msi = norm(msi)
+        # if self.img_norm:
+        #     norm = transforms.Compose([transforms.Normalize((0.5,), (0.5,))])
+        #     dsm = norm(dsm)
+        #     norm = transforms.Compose([transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+        #     msi = norm(msi)
+
+        input = torch.cat((msi, dsm), 0)
+
+        return input, lbl
+
+    @staticmethod
+    def transform(img, lbl):
+        """transform
+
+        :param img:
+        :param lbl:
+        """
+        ignore_index = 255
+        n_classes = 6
+        msi = img[:,:,:3]
+        dsm = np.expand_dims(img[:,:,-1], 0)
+        msi = msi.astype(np.float64)
+
+        dsm = (dsm - np.mean(dsm)) / np.std(dsm - np.mean(dsm))
+        for i in range(3):
+            msi[:,:,i] = (msi[:,:,i] - np.mean(msi[:,:,i])) / np.std(msi[:,:,i])
+        # NHWC -> NCHW
+        msi = msi.transpose(2, 0, 1)
+
+        classes = np.unique(lbl)
+        lbl = lbl.astype(float)
+        lbl = np.expand_dims(lbl, 0)
+
+        if not np.all(classes == np.unique(lbl)):
+            print("WARN: resizing labels yielded fewer classes")
+
+        if not np.all(np.unique(lbl[lbl != ignore_index]) < n_classes):
+            print("after det", classes, np.unique(lbl))
+            raise ValueError("Segmentation map contained invalid class values")
+        # imshow(img.transpose(1,2,0)[:,:,:-1])
+        # imshow(lbl.squeeze()*80)
+        msi = torch.from_numpy(msi).float()
+        dsm = torch.from_numpy(dsm).float()
+        lbl = torch.from_numpy(lbl).long()
 
         input = torch.cat((msi, dsm), 0)
 

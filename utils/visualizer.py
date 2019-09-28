@@ -8,6 +8,7 @@ if sys.version_info[0] == 2:
 else:
     VisdomExceptionBase = ConnectionError
 
+
 class Visualizer():
     """This class includes several functions that can display/save images and print/save logging information.
 
@@ -128,20 +129,45 @@ class Visualizer():
             counter_ratio (float) -- progress (percentage) in the current epoch, between 0 to 1
             losses (OrderedDict)  -- training losses stored in the format of (name, float) pairs
         """
-        if not hasattr(self, 'plot_data'):
-            self.plot_data = {'X': [], 'Y': [], 'legend': list(losses.keys())}
-        self.plot_data['X'].append(epoch + counter_ratio)
-        self.plot_data['Y'].append([losses[k] for k in self.plot_data['legend']])
+        if not hasattr(self, 'plot_data1'):
+            self.plot_data1 = {'X': [], 'Y': [], 'legend': list(losses.keys())}
+        self.plot_data1['X'].append(epoch + counter_ratio)
+        self.plot_data1['Y'].append([losses[k] for k in self.plot_data1['legend']])
         try:
             self.vis.line(
-                X=np.stack([np.array(self.plot_data['X'])] * len(self.plot_data['legend']), 1),
-                Y=np.array(self.plot_data['Y']),
+                X=np.stack([np.array(self.plot_data1['X'])] * len(self.plot_data1['legend']), 1),
+                Y=np.array(self.plot_data1['Y']),
                 opts={
                     'title': self.name + ' loss over time',
-                    'legend': self.plot_data['legend'],
+                    'legend': self.plot_data1['legend'],
                     'xlabel': 'epoch',
                     'ylabel': 'loss'},
                 win=self.display_id)
+        except VisdomExceptionBase:
+            self.create_visdom_connections()
+
+    def plot_current_accuracy(self, epoch, counter_ratio, accs):
+        """display the current losses on visdom display: dictionary of error labels and values
+
+        Parameters:
+            epoch (int)           -- current epoch
+            counter_ratio (float) -- progress (percentage) in the current epoch, between 0 to 1
+            losses (OrderedDict)  -- training losses stored in the format of (name, float) pairs
+        """
+        if not hasattr(self, 'plot_data2'):
+            self.plot_data2 = {'X': [], 'Y': [], 'legend': list(accs.keys())}
+        self.plot_data2['X'].append(epoch + counter_ratio)
+        self.plot_data2['Y'].append([accs[k] for k in self.plot_data2['legend']])
+        try:
+            self.vis.line(
+                X=np.stack([np.array(self.plot_data2['X'])] * len(self.plot_data2['legend']), 1),
+                Y=np.array(self.plot_data2['Y']),
+                opts={
+                    'title': self.name + ' Accuracy over time',
+                    'legend': self.plot_data2['legend'],
+                    'xlabel': 'epoch',
+                    'ylabel': 'accuray'},
+                win=self.display_id + 1)
         except VisdomExceptionBase:
             self.create_visdom_connections()
 

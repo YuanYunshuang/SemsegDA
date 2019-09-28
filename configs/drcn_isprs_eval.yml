@@ -3,7 +3,7 @@ model:
     input_nc: 4
     output_nc1: 6
     output_nc2: 4
-    num_downs: 7
+    num_downs: 8
     ngf: 64
     norm_layer: 'batch' # or 'instance'
     use_dropout: True
@@ -15,12 +15,12 @@ data:
     img_cols: 512
     n_classes: 6
     channels: 4
-    path: /home/robotics/ma_thesis_data/isprs/dataset512/Potsdam8cm
+    path: /home/robotics/ma_thesis_data/isprs/dataset512/Vaihingen8cm/test
     suffix: '.png'
 training:
-    epochs: 1000
+    epochs: 50
     batch_size: 2
-    val_interval: 200
+    val_interval: 1
     n_workers: 1
     print_interval: 10
     optimizer:
@@ -37,5 +37,5 @@ training:
         factor: 0.2
         threshold: 0.001
         patience: 5
-    resume: /home/robotics/SemsegDA/checkpoints/drcn_isprs/drcn_threeCity_best_model.pkl
-    checkpoint: /home/robotics/SemsegDA/checkpoints/drcn_isprs
+    resume: # /home/robotics/pytorch-semseg/runs/fcn_v1_3city/14_42_43_081819_focal_loss/fcnV1_threeCity_best_model.pkl
+    checkpoint: /home/robotics/SemsegDA/checkpoints/drcn_isprs/drcn_potsdam_best_model.pkl

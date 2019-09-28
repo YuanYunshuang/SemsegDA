@@ -3,7 +3,7 @@ import torch
 import random
 import numpy as np
 import argparse
-import yaml
+import yaml, shutil
 from loader import get_loader
 from model import DRCN
 import utils
@@ -11,7 +11,10 @@ from utils.metrics import averageMeter, runningScore
 from utils.visualizer import Visualizer
 from configs.base_options import BaseOptions
 
-def train(cfg):
+AccNames = ['OA', 'sImpervious_surfaces', 'Building', 'Low_vegetation', 'Tree', 'Car', 'Clutter']
+
+
+def train(cfg, logger):
     # Setup seeds
     torch.manual_seed(cfg.get("seed", 1337))
     torch.cuda.manual_seed(cfg.get("seed", 1337))
@@ -22,16 +25,29 @@ def train(cfg):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Setup Dataloader
-    loader = get_loader(cfg, "train")
+    loader_train = get_loader(cfg, "train")
+    loader_val = get_loader(cfg, "val")
 
     # Setup model
     model = DRCN(cfg).to(device)
+    start_epoch = 1
+    if cfg["training"]["resume"] is not None:
+        if os.path.isfile(cfg["training"]["resume"]):
+            print(
+                "Loading model and optimizer from checkpoint '{}'".format(cfg["training"]["resume"])
+            )
+            checkpoint = torch.load(cfg["training"]["resume"])
+            model.load_state_dict(checkpoint["model_state"])
+            start_epoch = checkpoint["epoch"]
+            del checkpoint
+
+        else:
+            print("No checkpoint found at '{}'".format(cfg["training"]["resume"]))
 
     # Setup Metrics and visualizer
     running_metrics_val = runningScore(cfg["data"]["n_classes"])
     val_loss1_meter = averageMeter()
     val_loss2_meter = averageMeter()
-    val_loss_meter = averageMeter()
     opt = BaseOptions()
     visualizer = Visualizer(opt)
 
@@ -39,65 +55,70 @@ def train(cfg):
     utils.mkdirs(cfg["training"]["checkpoint"])
 
     best_iou = -100.0
-    total_iters = 0
-    epoch = 0
+    epoch = start_epoch
     train_epochs = cfg["training"]["epochs"]
+    iters_per_epoch = len(loader_train)
     while epoch < train_epochs:
-        epoch += 1
         visualizer.reset()
-        for images, labels in loader:
-            total_iters += cfg["training"]["batch_size"]
+        for iter, (images, labels) in enumerate(loader_train):
             model.set_input(images, labels)
             model.optimize_parameters()
 
-            if total_iters % cfg["training"]["print_interval"]==0:
-                print_info = "Epoch:[{:4d}/{:4d}] Iter: [{:6d}] loss1: {:.5f}  loss2: {:.5f}  lr: {:.8f}"\
-                    .format(epoch, train_epochs, total_iters, model.loss1.item(), model.loss2.item(), model.optimizer1.defaults['lr'])
+            if iter % cfg["training"]["print_interval"]==0 and iter!=0:
+                print_info = "Epoch:[{:2d}/{:2d}] Iter: [{:4d}/{:4d}] loss1: {:.5f}  loss2: {:.5f}  lr: {:.5f}"\
+                    .format(epoch, train_epochs, iter, iters_per_epoch, model.loss1.item(), model.loss2.item(), model.optimizer1.defaults['lr'])
                 print(print_info)
 
-        if epoch % cfg["training"]["val_interval"]==0:
-            for images, labels in loader:
-                model.set_input(images, labels)
-                model.inference()
-                preds = torch.argmax(model.out1, 1).cpu().numpy()
-                labels = labels.data.numpy().squeeze()
+            if iter % cfg["training"]["val_interval"] == 0 and iter!=0:
+                for images, labels in loader_val:
+                    model.set_input(images, labels)
+                    model.inference()
+                    preds = torch.argmax(model.out1, 1).cpu().numpy()
+                    labels = labels.data.numpy().squeeze()
 
-                running_metrics_val.update(labels, preds)
-                val_loss1_meter.update(model.loss1.item())
-                val_loss2_meter.update(model.loss2.item() * 5)
-                val_loss_meter.update(model.loss1.item() + model.loss2.item() * 5)
+                    running_metrics_val.update(labels, preds)
+                    val_loss1_meter.update(model.loss1.item())
+                    val_loss2_meter.update(model.loss2.item())
 
-            # visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
-            losses = {'loss1': val_loss1_meter.avg,
-                      '5loss2': val_loss2_meter.avg,
-                      'total_loss': val_loss_meter.avg}
-            visualizer.plot_current_losses(epoch, epoch / train_epochs, losses)
+                # visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+                losses = {'loss1': val_loss1_meter.avg, '5loss2': val_loss2_meter.avg * 5}
+                score, class_iou = running_metrics_val.get_scores()
+                accs = []
+                accs.append(score["Overall Acc: \t"])
+                accs.extend(list(class_iou.values()))
+                accs = dict(zip(AccNames, accs))
+                tmp = iter/iters_per_epoch
+                visualizer.plot_current_losses(epoch, tmp, losses)
+                visualizer.plot_current_accuracy(epoch, tmp, accs)
+                logger.info("Epoch:{:03d} val_loss1:{:.05f} val_loss2:{:.05f}"
+                            .format(epoch, val_loss1_meter.avg, val_loss2_meter.avg))
+                for k, v in score.items():
+                    print(k, v)
+                    logger.info("{}: {}".format(k, v))
 
-            score, class_iou = running_metrics_val.get_scores()
-            for k, v in score.items():
-                print(k, v)
+                for k, v in class_iou.items():
+                    print("{}: {}".format(k, v))
+                    logger.info("{}: {}".format(k, v))
 
-            for k, v in class_iou.items():
-                print("{}: {}".format(k, v))
+                running_metrics_val.reset()
 
-            running_metrics_val.reset()
-
-            if score["Mean IoU : \t"] >= best_iou:
-                best_iou = score["Mean IoU : \t"]
-                state = {
-                    "epoch": epoch + 1,
-                    "model_state": model.state_dict(),
-                    "optimizer1_state": model.optimizer1.state_dict(),
-                    "scheduler1_state": model.scheduler1.state_dict(),
-                    "optimizer2_state": model.optimizer2.state_dict(),
-                    "scheduler2_state": model.scheduler2.state_dict(),
-                    "best_iou": best_iou,
-                }
-                save_path = os.path.join(
-                    cfg["training"]["checkpoint"],
-                    "{}_{}_best_model.pkl".format(cfg["model"]["arch"], cfg["data"]["dataset"]),
-                )
-                torch.save(state, save_path)
+                if score["Mean IoU : \t"] >= best_iou:
+                    best_iou = score["Mean IoU : \t"]
+                    state = {
+                        "epoch": epoch,
+                        "model_state": model.state_dict(),
+                        "optimizer1_state": model.optimizer1.state_dict(),
+                        "scheduler1_state": model.scheduler1.state_dict(),
+                        "optimizer2_state": model.optimizer2.state_dict(),
+                        "scheduler2_state": model.scheduler2.state_dict(),
+                        "best_iou": best_iou,
+                    }
+                    save_path = os.path.join(
+                        cfg["training"]["checkpoint"],
+                        "{}_{}_best_model.pkl".format(cfg["model"]["arch"], cfg["data"]["dataset"]),
+                    )
+                    torch.save(state, save_path)
+        epoch += 1
 
 
 
@@ -117,4 +138,8 @@ if __name__ == "__main__":
     with open(args.config) as fp:
         cfg = yaml.load(fp, Loader=yaml.Loader)
 
-    train(cfg)
+    logdir = cfg["training"]["checkpoint"]
+    logger = utils.get_logger(logdir)
+    shutil.copy(args.config, logdir)
+
+    train(cfg, logger)

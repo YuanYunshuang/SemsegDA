@@ -49,7 +49,7 @@ class DRCN(nn.Module):
         self.criterionPth2 = torch.nn.L1Loss()
         self.loss1 = None
         self.loss2 = None
-        self.optimizer1 = get_optimizer(self.filter_params('up1', reverse=True), cfg)
+        self.optimizer1 = get_optimizer(self.filter_params('up2'), cfg)
         self.optimizer2 = get_optimizer(self.filter_params('up1'), cfg)
         if cfg["training"]["lr_schedule"] is not None:
             self.scheduler1 = get_scheduler(self.optimizer1, cfg["training"]["lr_schedule"])
