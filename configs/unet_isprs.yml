@@ -1,13 +1,13 @@
 model:
     arch: unet
     input_nc: 4
-    output_nc1: 6
-    output_nc2: 4
+    output_nc: 6
     num_downs: 7
     ngf: 64
     norm_layer: 'batch' # or 'instance'
     use_dropout: True
 data:
+    name: 'isprs'
     dataset: threeCity
     train_split: train
     val_split: val
@@ -30,12 +30,12 @@ training:
         #momentum: 0.9
         betas: [0.95, 0.999]
     loss:
-        lambda: 0.99
+        name: 'cross_entropy'
     lr_schedule:
         name: 'plateau'
         mode: 'min'
         factor: 0.2
         threshold: 0.001
         patience: 5
-    resume: /home/robotics/SemsegDA/checkpoints/drcn_isprs/drcn_threeCity_best_model.pkl
-    checkpoint: /home/robotics/SemsegDA/checkpoints/drcn_isprs
+    resume:
+    checkpoint: /home/robotics/SemsegDA/checkpoints/unet_isprs
